@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool } = require('../db');
+const { prisma } = require('../db');
 const fs = require('fs');
 const path = require('path');
 
@@ -38,14 +38,14 @@ router.post('/exchange', async (req, res, next) => {
     return res.status(400).json({ error: 'Amount must be a positive number' });
   }
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
-
-    const [userRows] = await conn.query('SELECT id FROM users WHERE id = ?', [User_id]);
-    if (userRows.length === 0) {
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: User_id },
+      select: { id: true }
+    });
+    if (!user) {
       req?.log?.warn({ userId: User_id }, 'User not found');
-      await conn.rollback();
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -70,22 +70,26 @@ router.post('/exchange', async (req, res, next) => {
     const BUSINESS_WALLETS = NETWORK === 'testnet' ? BUSINESS_WALLETS_TESTNET : BUSINESS_WALLETS_MAINNET;
     const businessWallet = BUSINESS_WALLETS[resolvedCategory] || null;
     if (!businessWallet) {
-      await conn.rollback();
       return res.status(500).json({ error: 'Business wallet not configured for category' });
     }
-    await conn.query(
-      'INSERT INTO transactions (user_id, crypto_category, amount, wallet_address, status) VALUES (?, ?, ?, ?, ?)',
-      [User_id, resolvedCategory, amountNum, businessWallet, 'pending']
-    );
 
-    await conn.commit();
+    // Use Prisma transaction for atomicity
+    const transaction = await prisma.$transaction(async (tx) => {
+      return await tx.transaction.create({
+        data: {
+          userId: User_id,
+          cryptoCategory: resolvedCategory,
+          amount: amountNum,
+          walletAddress: businessWallet,
+          status: 'pending'
+        }
+      });
+    });
+
     req?.log?.info({ userId: User_id, category: resolvedCategory, amount: amountNum }, 'Exchange recorded as pending');
     return res.json({ User_id, Category: resolvedCategory, Amount: amountNum, Status: 'pending' });
   } catch (err) {
-    try { await conn.rollback(); } catch (_) {}
     return next(err);
-  } finally {
-    conn.release();
   }
 });
 

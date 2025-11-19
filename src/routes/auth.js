@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool } = require('../db');
+const { prisma } = require('../db');
 const priceProvider = require('../services/priceProvider');
 
 const router = express.Router();
@@ -17,19 +17,25 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and Password are required' });
     }
 
-    const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [Email]);
-    if (existing.length > 0) {
+    const existing = await prisma.user.findUnique({
+      where: { email: Email },
+      select: { id: true }
+    });
+    if (existing) {
       req?.log?.warn({ email: Email }, 'Email already registered');
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    const [result] = await pool.query(
-      'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
-      [Email, Password, Username]
-    );
+    const result = await prisma.user.create({
+      data: {
+        email: Email,
+        password: Password,
+        name: Username || null
+      }
+    });
 
-    req?.log?.info({ userId: result.insertId, email: Email }, 'Register success');
-    return res.status(201).json({ user_id: result.insertId });
+    req?.log?.info({ userId: result.id, email: Email }, 'Register success');
+    return res.status(201).json({ user_id: result.id });
   } catch (err) {
     return next(err);
   }
@@ -49,26 +55,34 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and Password are required' });
     }
 
-    const [rows] = await pool.query(
-      'SELECT id FROM users WHERE email = ? AND password = ?',
-      [Email, Password]
-    );
-    if (rows.length === 0) {
+    const user = await prisma.user.findFirst({
+      where: {
+        email: Email,
+        password: Password
+      },
+      select: { id: true }
+    });
+    if (!user) {
       req?.log?.warn({ email: Email }, 'Invalid credentials');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const user = rows[0];
     // Derive Total_amount using live prices and summed amounts per category
-    const [agg] = await pool.query(
-      "SELECT crypto_category AS category, SUM(amount) AS totalAmount FROM transactions WHERE user_id = ? AND status = 'success' GROUP BY crypto_category",
-      [user.id]
-    );
+    const agg = await prisma.transaction.groupBy({
+      by: ['cryptoCategory'],
+      where: {
+        userId: user.id,
+        status: 'success'
+      },
+      _sum: {
+        amount: true
+      }
+    });
     let totalFiat = 0;
     for (const row of agg) {
       try {
-        const { price } = await priceProvider.getPriceForSymbol(row.category);
-        totalFiat += Number(row.totalAmount) * Number(price);
+        const { price } = await priceProvider.getPriceForSymbol(row.cryptoCategory);
+        totalFiat += Number(row._sum.amount || 0) * Number(price);
       } catch (_) {
         // If price fetch fails, skip that category contribution
       }

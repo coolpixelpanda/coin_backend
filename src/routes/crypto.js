@@ -1,5 +1,5 @@
 const express = require('express');
-const { pool } = require('../db');
+const { prisma } = require('../db');
 const priceProvider = require('../services/priceProvider');
 
 const router = express.Router();
@@ -7,7 +7,10 @@ const router = express.Router();
 // GET /api/crypto-price
 router.get('/crypto-price', async (req, res, next) => {
   try {
-    const [rows] = await pool.query('SELECT id, category FROM cryptos ORDER BY id ASC');
+    const rows = await prisma.crypto.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, category: true }
+    });
     let results;
     if (rows.length === 0) {
       const { data } = await priceProvider.getAllPrices();
