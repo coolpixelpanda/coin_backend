@@ -35,8 +35,19 @@ app.use((req, res, next) => {
 app.options('*', cors());
 
 // Health check
-app.get('/', (req, res) => {
-  res.json({ status: 'ok' });
+app.get('/', async (req, res) => {
+  try {
+    // Test database connection
+    const { prisma } = require('./db');
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'error', 
+      database: 'disconnected',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database connection failed'
+    });
+  }
 });
 
 // Routes
