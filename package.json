@@ -13,7 +13,9 @@
     "tx:seed": "node scripts/seedPendingTx.js",
     "tx:runOnce": "node scripts/runWatcherOnce.js",
     "tx:test": "node scripts/testWatcher.js",
-    "addr:gen:testnet": "node scripts/genTestnetBtcAddress.js"
+    "addr:gen:testnet": "node scripts/genTestnetBtcAddress.js",
+    "postinstall": "prisma generate",
+    "build": "prisma generate"
   },
   "license": "MIT",
   "dependencies": {
