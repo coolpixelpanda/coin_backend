@@ -9,6 +9,22 @@ const router = express.Router();
 // Sign Up
 // POST /api/register
 // Payload: { Email, Password }
+// GET /api/register - Returns API info (for testing)
+router.get('/register', (req, res) => {
+  res.json({ 
+    message: 'Registration endpoint',
+    method: 'POST',
+    endpoint: '/api/register',
+    requiredFields: ['Email', 'Password'],
+    optionalFields: ['Username'],
+    example: {
+      Email: 'user@example.com',
+      Password: 'password123',
+      Username: 'John Doe'
+    }
+  });
+});
+
 router.post('/register', async (req, res, next) => {
   try {
     const { Email, Password, Username } = req.body || {};
