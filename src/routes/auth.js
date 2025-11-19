@@ -26,17 +26,45 @@ router.post('/register', async (req, res, next) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    const result = await prisma.user.create({
-      data: {
-        email: Email,
-        password: Password,
-        name: Username || null
-      }
-    });
+    let result;
+    try {
+      result = await prisma.user.create({
+        data: {
+          email: Email,
+          password: Password,
+          name: Username || null
+        },
+        select: {
+          id: true
+        }
+      });
+    } catch (prismaError) {
+      req?.log?.error({ 
+        email: Email, 
+        error: prismaError?.message,
+        code: prismaError?.code,
+        meta: prismaError?.meta,
+        stack: prismaError?.stack
+      }, 'Prisma error during user creation');
+      // Re-throw to be handled by outer catch
+      throw prismaError;
+    }
+
+    if (!result || !result.id) {
+      req?.log?.error({ email: Email, result }, 'Failed to create user - result is invalid');
+      return res.status(500).json({ error: 'Failed to create user' });
+    }
 
     req?.log?.info({ userId: result.id, email: Email }, 'Register success');
     return res.status(201).json({ user_id: result.id });
   } catch (err) {
+    req?.log?.error({ 
+      email: Email,
+      error: err?.message,
+      code: err?.code,
+      name: err?.name,
+      stack: err?.stack
+    }, 'Error in register endpoint');
     return next(err);
   }
 });

@@ -4,32 +4,36 @@ const { PrismaClient } = require('@prisma/client');
 // This prevents connection pool exhaustion in serverless functions
 const globalForPrisma = globalThis;
 
-// Determine if we're using Prisma Accelerate (prisma+postgres://) or direct connection
-const databaseUrl = process.env.PRISMA_DATABASE_URL || process.env.POSTGRES_URL;
-const isAccelerate = databaseUrl && databaseUrl.startsWith('prisma+postgres://');
+// Get database URL from environment (check multiple possible variable names)
+// Prisma looks for DATABASE_URL by default, but we also support PRISMA_DATABASE_URL
+const databaseUrl = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL || process.env.POSTGRES_URL;
 
-// Prisma 7.0: Pass connection URL via accelerateUrl (for Accelerate) or adapter (for direct)
+// Prisma 7.0 Configuration
+// For Accelerate URLs (prisma+postgres://), Prisma automatically detects and uses Accelerate
+// For direct connections (postgres://), Prisma uses direct connection
+// In Prisma 7.0, connection URLs should be set via DATABASE_URL environment variable
+// The PrismaClient constructor may not accept url property directly
 const prismaConfig = {
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
 };
 
-if (isAccelerate) {
-  // Use Accelerate connection - Prisma 7.0 format
-  prismaConfig.accelerateUrl = databaseUrl;
-} else if (databaseUrl) {
-  // Use direct PostgreSQL connection
-  // Note: For Prisma 7.0, direct connections may need adapter package
-  // Since we're using Accelerate, this is mainly for fallback
-  // If you need direct connections, you may need to install @prisma/adapter-postgresql
-  prismaConfig.url = databaseUrl; // Fallback for compatibility
+// Ensure DATABASE_URL is set for Prisma to use
+// Prisma Client reads from DATABASE_URL environment variable automatically
+if (databaseUrl && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = databaseUrl;
 }
 
-const prisma = globalForPrisma.prisma || new PrismaClient(prismaConfig);
-
-// In development, prevent multiple instances during hot reload
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+// Create Prisma Client instance (singleton pattern for serverless)
+if (!globalForPrisma.prisma) {
+  try {
+    globalForPrisma.prisma = new PrismaClient(prismaConfig);
+  } catch (error) {
+    console.error('Failed to initialize Prisma Client:', error);
+    throw error;
+  }
 }
+
+const prisma = globalForPrisma.prisma;
 
 // Handle graceful shutdown (only in non-serverless environments)
 if (typeof process.env.VERCEL === 'undefined') {
