@@ -15,7 +15,10 @@
     "tx:test": "node scripts/testWatcher.js",
     "addr:gen:testnet": "node scripts/genTestnetBtcAddress.js",
     "postinstall": "prisma generate",
-    "build": "prisma generate"
+    "build": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js"
   },
   "license": "MIT",
   "dependencies": {
