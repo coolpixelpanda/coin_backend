@@ -8,17 +8,33 @@ const prisma = new PrismaClient({
 async function main() {
   console.log('Seeding database...');
 
-  // Seed default cryptos
-  const cryptos = ['BTC', 'ETH', 'USDT'];
+  // Seed default cryptos (matching SQL data format)
+  const cryptos = [
+    { id: 1, category: 'bitcoin' },
+    { id: 2, category: 'ethereum' }
+  ];
   
-  for (const category of cryptos) {
+  for (const crypto of cryptos) {
     await prisma.crypto.upsert({
-      where: { category },
-      update: {},
-      create: { category },
+      where: { id: crypto.id },
+      update: { category: crypto.category },
+      create: crypto,
     });
-    console.log(`✓ Seeded crypto: ${category}`);
+    console.log(`✓ Seeded crypto: ${crypto.category} (id: ${crypto.id})`);
   }
+
+  // Seed sample feedback (optional - matching SQL data)
+  const sampleFeedback = {
+    username: 'Tomas Hammer',
+    feedback: 'I am really excited to see this opportunity. CoinTransfer is the best place to sell the crypto. I am really a lucky man!!!'
+  };
+  
+  await prisma.feedback.upsert({
+    where: { id: 1 },
+    update: sampleFeedback,
+    create: { id: 1, ...sampleFeedback },
+  });
+  console.log(`✓ Seeded feedback: ${sampleFeedback.username}`);
 
   console.log('Seeding completed!');
 }

@@ -11,9 +11,9 @@ datasource db {
 
 model User {
   id       Int    @id @default(autoincrement())
-  name     String? @map("name")
-  email    String @unique @map("email")
-  password String @map("password")
+  name     String @map("name") @db.VarChar(20)
+  email    String @unique @map("email") @db.VarChar(100)
+  password String @map("password") @db.VarChar(20)
   
   transactions Transaction[]
   
@@ -21,8 +21,8 @@ model User {
 }
 
 model Crypto {
-  id       Int    @id @default(autoincrement())
-  category String @unique @map("category")
+  id       Int     @id @default(autoincrement())
+  category String? @map("category") @db.VarChar(20)
   
   @@map("cryptos")
 }
@@ -32,11 +32,19 @@ model Transaction {
   userId        Int      @map("user_id")
   cryptoCategory String  @map("crypto_category")
   amount        Decimal  @db.Decimal(18, 8) @map("amount")
-  walletAddress String? @map("wallet_address")
+  walletAddress String   @map("wallet_address")
   status        String   @map("status")
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   
   @@map("transactions")
+}
+
+model Feedback {
+  id       Int    @id @default(autoincrement())
+  username String @map("username")
+  feedback String @map("feedback") @db.VarChar(1000)
+  
+  @@map("feedbacks")
 }
 
