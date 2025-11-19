@@ -5,22 +5,45 @@ const { PrismaClient } = require('@prisma/client');
 const globalForPrisma = globalThis;
 
 // Get database URL from environment (check multiple possible variable names)
-// Prisma looks for DATABASE_URL by default, but we also support PRISMA_DATABASE_URL
 const databaseUrl = process.env.DATABASE_URL || process.env.PRISMA_DATABASE_URL || process.env.POSTGRES_URL;
 
 // Prisma 7.0 Configuration
-// For Accelerate URLs (prisma+postgres://), Prisma automatically detects and uses Accelerate
-// For direct connections (postgres://), Prisma uses direct connection
-// In Prisma 7.0, connection URLs should be set via DATABASE_URL environment variable
-// The PrismaClient constructor may not accept url property directly
+// Prisma 7.0 REQUIRES either "adapter" or "accelerateUrl" in the constructor
+// - Use "accelerateUrl" for Prisma Accelerate connections (prisma+postgres://)
+// - Use "adapter" for direct database connections (postgres://)
+if (!databaseUrl) {
+  throw new Error('Database URL not found. Please set DATABASE_URL, PRISMA_DATABASE_URL, or POSTGRES_URL environment variable.');
+}
+
+const isAccelerate = databaseUrl.startsWith('prisma+postgres://');
+
 const prismaConfig = {
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
 };
 
-// Ensure DATABASE_URL is set for Prisma to use
-// Prisma Client reads from DATABASE_URL environment variable automatically
-if (databaseUrl && !process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = databaseUrl;
+if (isAccelerate) {
+  // Prisma Accelerate connection - REQUIRED in Prisma 7.0
+  prismaConfig.accelerateUrl = databaseUrl;
+} else {
+  // Direct PostgreSQL connection - Prisma 7.0 requires adapter
+  // Note: For direct connections, you may need to install @prisma/adapter-postgresql
+  // For now, we'll try using the adapter format. If this fails, install the adapter package.
+  try {
+    // Try to use adapter with url property
+    const { PrismaPgAdapter } = require('@prisma/adapter-postgresql');
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: databaseUrl });
+    prismaConfig.adapter = new PrismaPgAdapter(pool);
+  } catch (adapterError) {
+    // If adapter package is not installed, provide helpful error
+    console.error('Direct PostgreSQL connection requires @prisma/adapter-postgresql package.');
+    console.error('Install it with: npm install @prisma/adapter-postgresql pg');
+    console.error('Or use Prisma Accelerate (prisma+postgres://) connection string instead.');
+    throw new Error(
+      'Direct PostgreSQL connections require @prisma/adapter-postgresql. ' +
+      'Please install it or use Prisma Accelerate connection string.'
+    );
+  }
 }
 
 // Create Prisma Client instance (singleton pattern for serverless)
