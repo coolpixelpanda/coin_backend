@@ -1,3 +1,8 @@
+// Load environment variables first (for local development)
+// This ensures .env file is loaded before accessing process.env
+// Always load dotenv - it's safe to call multiple times
+require('dotenv').config();
+
 const { PrismaClient } = require('@prisma/client');
 
 // Prisma Client singleton pattern for serverless environments (Vercel)

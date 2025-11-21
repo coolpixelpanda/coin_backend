@@ -1,8 +1,7 @@
-// Prisma 7.0: Configuration file for migrations
-// This file is used by Prisma Migrate, not Prisma Client
+// Prisma 7.0: Configuration file for migrations and db push
 module.exports = {
   datasource: {
-    url: process.env.PRISMA_DATABASE_URL || process.env.POSTGRES_URL,
+    url: process.env.DATABASE_URL || process.env.POSTGRES_URL,
   },
 };
 

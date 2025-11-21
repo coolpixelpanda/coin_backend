@@ -1,9 +1,35 @@
 // Prisma seed script to populate initial data
 const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient({
-  accelerateUrl: process.env.PRISMA_DATABASE_URL || process.env.DATABASE_URL,
-});
+// For seeding, prefer Accelerate if available, otherwise use direct connection
+const accelerateUrl = process.env.PRISMA_DATABASE_URL;
+const directUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const databaseUrl = accelerateUrl || directUrl;
+
+if (!databaseUrl) {
+  console.error('Error: No database URL found. Please set PRISMA_DATABASE_URL or DATABASE_URL');
+  process.exit(1);
+}
+
+const isAccelerate = databaseUrl.startsWith('prisma+postgres://');
+
+const prismaConfig = {};
+if (isAccelerate) {
+  // Use Accelerate for seeding (works fine)
+  prismaConfig.accelerateUrl = databaseUrl;
+} else {
+  // For direct connections, Prisma 7.0 requires adapter
+  // But we can use Accelerate URL from PRISMA_DATABASE_URL if available
+  if (accelerateUrl) {
+    prismaConfig.accelerateUrl = accelerateUrl;
+  } else {
+    console.error('Error: For direct PostgreSQL connections, Prisma 7.0 requires @prisma/adapter-postgresql');
+    console.error('Please use Prisma Accelerate (PRISMA_DATABASE_URL) or install the adapter package');
+    process.exit(1);
+  }
+}
+
+const prisma = new PrismaClient(prismaConfig);
 
 async function main() {
   console.log('Seeding database...');
