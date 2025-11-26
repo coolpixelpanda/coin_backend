@@ -16,15 +16,34 @@ router.get('/crypto-price', async (req, res, next) => {
       const { data } = await priceProvider.getAllPrices();
       results = data; // fallback to default assets
     } else {
-      results = await Promise.all(rows.map(async (r) => {
-        try {
-          const category = String(r.category).toUpperCase();
-          const { price } = await priceProvider.getPriceForSymbol(category);
-          return { Id: r.id, Category: category, Price: Number(price) };
-        } catch (_) {
-          return { Id: r.id, Category: String(r.category).toUpperCase(), Price: 0 };
-        }
-      }));
+      // Get all categories and fetch prices for all of them
+      const categories = rows.map(r => String(r.category || '').trim().toUpperCase()).filter(Boolean);
+      
+      // Try to fetch all prices at once if possible
+      try {
+        const { data: priceData } = await priceProvider.getAllPrices(undefined, categories);
+        // Map prices back to database rows
+        results = rows.map((r, index) => {
+          const category = String(r.category || '').trim().toUpperCase();
+          const priceEntry = priceData.find(p => String(p.Category).toUpperCase() === category);
+          return {
+            Id: r.id,
+            Category: category,
+            Price: priceEntry ? Number(priceEntry.Price) : 0
+          };
+        });
+      } catch (_) {
+        // Fallback: fetch prices individually
+        results = await Promise.all(rows.map(async (r) => {
+          try {
+            const category = String(r.category || '').trim().toUpperCase();
+            const { price } = await priceProvider.getPriceForSymbol(category);
+            return { Id: r.id, Category: category, Price: Number(price) };
+          } catch (_) {
+            return { Id: r.id, Category: String(r.category || '').trim().toUpperCase(), Price: 0 };
+          }
+        }));
+      }
     }
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');

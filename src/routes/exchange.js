@@ -18,19 +18,50 @@ router.post('/exchange', async (req, res, next) => {
   }
 
   const normalizedCategory = categoryInput.toUpperCase();
+  
+  // Get supported cryptocurrencies from database
+  const supportedCryptos = await prisma.crypto.findMany({
+    select: { category: true }
+  });
+  
+  // Normalize categories to uppercase for comparison
+  const supportedSymbols = supportedCryptos
+    .map(c => String(c.category || '').toUpperCase().trim())
+    .filter(Boolean);
+  
+  // Handle BTC/TBTC alias for testnet/mainnet
   const isBtcAlias = normalizedCategory === 'BTC' || normalizedCategory === 'TBTC';
-  const resolvedCategory = isBtcAlias
-    ? (NETWORK === 'testnet' ? 'TBTC' : 'BTC')
-    : normalizedCategory;
-  const supportedSymbols = NETWORK === 'testnet'
-    ? ['TBTC', 'ETH', 'USDT']
-    : ['BTC', 'ETH', 'USDT'];
+  let resolvedCategory = normalizedCategory;
+  
+  if (isBtcAlias) {
+    resolvedCategory = NETWORK === 'testnet' ? 'TBTC' : 'BTC';
+  }
+  
+  // Also check lowercase versions (e.g., 'bitcoin' -> 'BTC')
+  const categoryLower = normalizedCategory.toLowerCase();
+  const cryptoMap = {
+    'bitcoin': NETWORK === 'testnet' ? 'TBTC' : 'BTC',
+    'ethereum': 'ETH',
+    'tether': 'USDT',
+    'btc': NETWORK === 'testnet' ? 'TBTC' : 'BTC',
+    'eth': 'ETH',
+    'usdt': 'USDT'
+  };
+  
+  if (cryptoMap[categoryLower]) {
+    resolvedCategory = cryptoMap[categoryLower];
+  }
 
-  req?.log?.info({ userId: User_id, category: categoryInput, resolvedCategory, amount: Amount, network: NETWORK }, 'Exchange request');
+  req?.log?.info({ userId: User_id, category: categoryInput, resolvedCategory, amount: Amount, network: NETWORK, supportedSymbols }, 'Exchange request');
 
+  // Check if the resolved category is in the supported list
   if (!supportedSymbols.includes(resolvedCategory)) {
-    req?.log?.warn({ category: categoryInput, resolvedCategory, network: NETWORK }, 'Invalid crypto category');
-    return res.status(400).json({ error: 'Invalid crypto category' });
+    req?.log?.warn({ category: categoryInput, resolvedCategory, network: NETWORK, supportedSymbols }, 'Invalid crypto category');
+    return res.status(400).json({ 
+      error: 'Invalid crypto category',
+      supportedCategories: supportedSymbols,
+      received: categoryInput
+    });
   }
 
   const amountNum = Number(Amount);
@@ -49,28 +80,28 @@ router.post('/exchange', async (req, res, next) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const BUSINESS_WALLETS_MAINNET = {
-      BTC: 'REPLACE_WITH_YOUR_BTC_WALLET',
-      ETH: 'REPLACE_WITH_YOUR_ETH_WALLET',
-      USDT: 'REPLACE_WITH_YOUR_USDT_WALLET'
-    };
-    let testnetBtcAddress = null;
-    if (NETWORK === 'testnet') {
+    // Get business wallet address from environment variables or use default
+    // Format: {SYMBOL}_WALLET_ADDRESS (e.g., BTC_WALLET_ADDRESS, ETH_WALLET_ADDRESS)
+    // For testnet, use {SYMBOL}_TESTNET_WALLET_ADDRESS or fallback to mainnet
+    const walletEnvKey = NETWORK === 'testnet' 
+      ? `${resolvedCategory}_TESTNET_WALLET_ADDRESS`
+      : `${resolvedCategory}_WALLET_ADDRESS`;
+    
+    let businessWallet = process.env[walletEnvKey] || process.env[`${resolvedCategory}_WALLET_ADDRESS`];
+    
+    // Fallback: Try to read from testnet-wallet.json for BTC/TBTC
+    if (!businessWallet && (resolvedCategory === 'BTC' || resolvedCategory === 'TBTC')) {
       try {
         const p = path.resolve(process.cwd(), 'testnet-wallet.json');
         const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-        testnetBtcAddress = j.btcAddress || null;
+        businessWallet = j.btcAddress || null;
       } catch (_) {}
     }
-    const BUSINESS_WALLETS_TESTNET = {
-      TBTC: testnetBtcAddress || 'REPLACE_WITH_YOUR_TESTNET_BTC_WALLET',
-      ETH: 'REPLACE_WITH_YOUR_TESTNET_ETH_WALLET',
-      USDT: 'REPLACE_WITH_YOUR_TESTNET_USDT_WALLET'
-    };
-    const BUSINESS_WALLETS = NETWORK === 'testnet' ? BUSINESS_WALLETS_TESTNET : BUSINESS_WALLETS_MAINNET;
-    const businessWallet = BUSINESS_WALLETS[resolvedCategory] || null;
+    
+    // If still no wallet, use a default placeholder
     if (!businessWallet) {
-      return res.status(500).json({ error: 'Business wallet not configured for category' });
+      businessWallet = `REPLACE_WITH_YOUR_${resolvedCategory}_WALLET`;
+      req?.log?.warn({ category: resolvedCategory, walletEnvKey }, 'Using placeholder wallet address - configure in environment variables');
     }
 
     // Use Prisma transaction for atomicity
