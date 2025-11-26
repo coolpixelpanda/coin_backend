@@ -37,15 +37,26 @@ router.post('/exchange', async (req, res, next) => {
     resolvedCategory = NETWORK === 'testnet' ? 'TBTC' : 'BTC';
   }
   
-  // Also check lowercase versions (e.g., 'bitcoin' -> 'BTC')
+  // Also check lowercase versions and common aliases (e.g., 'bitcoin' -> 'BTC', 'solana' -> 'SOL')
   const categoryLower = normalizedCategory.toLowerCase();
   const cryptoMap = {
+    // Full names -> symbols
     'bitcoin': NETWORK === 'testnet' ? 'TBTC' : 'BTC',
     'ethereum': 'ETH',
     'tether': 'USDT',
+    'xrp': 'XRP',
+    'ripple': 'XRP',
+    'bnb': 'BNB',
+    'binancecoin': 'BNB',
+    'binance coin': 'BNB',
+    'solana': 'SOL',
+    // Symbols (already uppercase, but handle lowercase input)
     'btc': NETWORK === 'testnet' ? 'TBTC' : 'BTC',
     'eth': 'ETH',
-    'usdt': 'USDT'
+    'usdt': 'USDT',
+    'xrp': 'XRP',
+    'bnb': 'BNB',
+    'sol': 'SOL'
   };
   
   if (cryptoMap[categoryLower]) {

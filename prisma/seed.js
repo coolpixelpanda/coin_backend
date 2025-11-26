@@ -34,10 +34,14 @@ const prisma = new PrismaClient(prismaConfig);
 async function main() {
   console.log('Seeding database...');
 
-  // Seed default cryptos (matching SQL data format)
+  // Seed default cryptos - using standard symbols for exchange compatibility
   const cryptos = [
-    { id: 1, category: 'bitcoin' },
-    { id: 2, category: 'ethereum' }
+    { id: 1, category: 'BTC' },   // Bitcoin
+    { id: 2, category: 'ETH' },    // Ethereum
+    { id: 3, category: 'USDT' },   // Tether
+    { id: 4, category: 'XRP' },    // XRP
+    { id: 5, category: 'BNB' },   // Binance Coin
+    { id: 6, category: 'SOL' }     // Solana
   ];
   
   for (const crypto of cryptos) {
